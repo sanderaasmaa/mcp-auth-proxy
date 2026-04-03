@@ -84,9 +84,11 @@ func Run(
 	if err != nil {
 		return fmt.Errorf("failed to parse external URL: %w", err)
 	}
-	if parsedExternalURL.Path != "" {
+	if parsedExternalURL.Path != "" && parsedExternalURL.Path != "/" {
 		return fmt.Errorf("external URL must not have a path, got: %s", parsedExternalURL.Path)
 	}
+	parsedExternalURL.Path = "/"
+	externalURL = parsedExternalURL.String()
 
 	if (tlsCertFile == "") != (tlsKeyFile == "") {
 		return fmt.Errorf("both TLS certificate and key files must be provided together")
@@ -297,6 +299,10 @@ func Run(
 
 	router := gin.New()
 	router.SetTrustedProxies(trustedProxy)
+
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, true))
 	router.Use(ginzap.RecoveryWithZap(logger, true))

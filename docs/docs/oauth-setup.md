@@ -172,7 +172,6 @@ For group-based authorization with Okta:
    ```
 
 2. Configure a groups claim in Okta Admin:
-
    - Go to Security → API → Authorization Servers
    - Select your authorization server → Claims tab
    - Add a claim named "groups" with value type "Groups" and filter as needed
