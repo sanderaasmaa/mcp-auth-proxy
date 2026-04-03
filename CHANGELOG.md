@@ -1,5 +1,39 @@
 # Changelog
 
+## [2.7.0](https://github.com/sigbit/mcp-auth-proxy/compare/v2.6.1...v2.7.0) (2026-04-03)
+
+
+### Features
+
+* add unauthenticated /healthz endpoint for health checks ([#131](https://github.com/sigbit/mcp-auth-proxy/issues/131)) ([9803d0f](https://github.com/sigbit/mcp-auth-proxy/commit/9803d0fb3bc3e7c1bb915a01ce99495e02a27c53))
+
+
+### Bug Fixes
+
+* prevent panic on SSE reverse proxy when backend closes connection ([#128](https://github.com/sigbit/mcp-auth-proxy/issues/128)) ([76d1ac5](https://github.com/sigbit/mcp-auth-proxy/commit/76d1ac516899a763f75c8e015c3bfc08cb5a36b2))
+* set JWT audience claim to external URL for RFC 8707 compliance ([#133](https://github.com/sigbit/mcp-auth-proxy/issues/133)) ([351305a](https://github.com/sigbit/mcp-auth-proxy/commit/351305a8bb6a34f3ce8f4b5444c7834c469e364c)), closes [#129](https://github.com/sigbit/mcp-auth-proxy/issues/129)
+
+## [2.6.1](https://github.com/sigbit/mcp-auth-proxy/compare/v2.6.0...v2.6.1) (2026-03-18)
+
+
+### Bug Fixes
+
+* generate server-side OAuth state when client omits it ([#126](https://github.com/sigbit/mcp-auth-proxy/issues/126)) ([940e91e](https://github.com/sigbit/mcp-auth-proxy/commit/940e91e5979e3441cb590f2d706661bd7fdccf99))
+
+## [2.6.0](https://github.com/sigbit/mcp-auth-proxy/compare/v2.5.4...v2.6.0) (2026-03-16)
+
+
+### Features
+
+* Add OIDC Attribute-Based Authorization ([#120](https://github.com/sigbit/mcp-auth-proxy/issues/120)) ([51b6e85](https://github.com/sigbit/mcp-auth-proxy/commit/51b6e85ff100a621e28720822908781b2561452d))
+* support injecting cryptographic keys via env vars ([#119](https://github.com/sigbit/mcp-auth-proxy/issues/119)) ([ec9e857](https://github.com/sigbit/mcp-auth-proxy/commit/ec9e857c821e5b7cd1538f473427a366eefbc01f))
+
+
+### Bug Fixes
+
+* fix prettier formatting in oauth-setup.md ([#124](https://github.com/sigbit/mcp-auth-proxy/issues/124)) ([ef5731d](https://github.com/sigbit/mcp-auth-proxy/commit/ef5731dc8be1c2294b39f3eaabeb9f92df094689))
+* normalize external URL with trailing slash per RFC 3986 ([#125](https://github.com/sigbit/mcp-auth-proxy/issues/125)) ([e377aa9](https://github.com/sigbit/mcp-auth-proxy/commit/e377aa9ed27b14a8f5d557512b1b9ad521e3fe35))
+
 ## [2.5.4](https://github.com/sigbit/mcp-auth-proxy/compare/v2.5.3...v2.5.4) (2026-03-03)
 
 

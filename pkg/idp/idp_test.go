@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -270,4 +272,197 @@ func TestPrivateClient(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, newAccessToken)
 	require.NotEqual(t, originalAccessToken, newAccessToken, "Access token should be different after refresh")
+}
+
+// registerTestClient is a helper that registers a private OAuth client and returns the registration response.
+func registerTestClient(t *testing.T, serverURL string) registrationResponse {
+	t.Helper()
+
+	regReq := registrationRequest{
+		ClientName:              "Test OAuth Client",
+		GrantTypes:              []string{"authorization_code", "refresh_token"},
+		ResponseTypes:           []string{"code"},
+		TokenEndpointAuthMethod: "client_secret_basic",
+		Scope:                   "test",
+		RedirectURIs:            []string{"http://localhost:8080/callback"},
+	}
+
+	reqBody, err := json.Marshal(regReq)
+	require.NoError(t, err)
+
+	resp, err := http.Post(serverURL+RegistrationEndpoint, "application/json", bytes.NewReader(reqBody))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	var regResp registrationResponse
+	err = json.NewDecoder(resp.Body).Decode(&regResp)
+	require.NoError(t, err)
+
+	return regResp
+}
+
+// testAuthFlowWithURL performs the OAuth authorization flow given a raw authorization URL
+// and returns the callback URL after authorization completes.
+func testAuthFlowWithURL(t *testing.T, serverURL, authURL string) *url.URL {
+	t.Helper()
+
+	jar, err := cookiejar.New(nil)
+	require.NoError(t, err)
+	client := &http.Client{
+		Jar: jar,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	// Step 1: Make initial authorization request
+	authResp, err := client.Get(authURL)
+	require.NoError(t, err)
+	defer authResp.Body.Close()
+
+	require.Contains(t, []int{http.StatusFound, http.StatusSeeOther}, authResp.StatusCode,
+		"expected redirect, got %d", authResp.StatusCode)
+	location := authResp.Header.Get("Location")
+	require.NotEmpty(t, location)
+	require.Contains(t, location, strings.ReplaceAll(AuthorizationReturnEndpoint, ":ar_id", ""))
+
+	// Step 2: Follow the redirect to complete authorization
+	authReturnResp, err := client.Get(serverURL + location)
+	require.NoError(t, err)
+	defer authReturnResp.Body.Close()
+
+	require.Contains(t, []int{http.StatusFound, http.StatusSeeOther}, authReturnResp.StatusCode,
+		"expected redirect with authorization code, got %d", authReturnResp.StatusCode)
+	callbackLocation := authReturnResp.Header.Get("Location")
+	require.NotEmpty(t, callbackLocation)
+
+	callbackURL, err := url.Parse(callbackLocation)
+	require.NoError(t, err)
+	require.NotEmpty(t, callbackURL.Query().Get("code"), "callback URL should contain an authorization code")
+
+	return callbackURL
+}
+
+func TestAuthWithoutState(t *testing.T) {
+	server, _, _ := setupTestServer(t)
+	regResp := registerTestClient(t, server.URL)
+
+	// Build authorization URL manually WITHOUT a state parameter
+	authURL := fmt.Sprintf("%s%s?response_type=code&client_id=%s&redirect_uri=%s",
+		server.URL, AuthorizationEndpoint, regResp.ClientID,
+		url.QueryEscape("http://localhost:8080/callback"))
+
+	callbackURL := testAuthFlowWithURL(t, server.URL, authURL)
+
+	// Server should have generated a state and echoed it back
+	require.NotEmpty(t, callbackURL.Query().Get("state"), "server should generate a state when client omits it")
+
+	// Exchange authorization code for tokens
+	code := callbackURL.Query().Get("code")
+	tokenReq := url.Values{}
+	tokenReq.Set("grant_type", "authorization_code")
+	tokenReq.Set("code", code)
+	tokenReq.Set("redirect_uri", "http://localhost:8080/callback")
+	tokenReq.Set("client_id", regResp.ClientID)
+	tokenReq.Set("client_secret", regResp.ClientSecret)
+
+	tokenResp, err := http.PostForm(server.URL+TokenEndpoint, tokenReq)
+	require.NoError(t, err)
+	defer tokenResp.Body.Close()
+
+	require.Equal(t, http.StatusOK, tokenResp.StatusCode)
+
+	var tokenResult map[string]any
+	err = json.NewDecoder(tokenResp.Body).Decode(&tokenResult)
+	require.NoError(t, err)
+	require.NotEmpty(t, tokenResult["access_token"])
+}
+
+func TestAuthWithEmptyState(t *testing.T) {
+	server, _, _ := setupTestServer(t)
+	regResp := registerTestClient(t, server.URL)
+
+	// Build authorization URL with an empty state parameter
+	authURL := fmt.Sprintf("%s%s?response_type=code&client_id=%s&redirect_uri=%s&state=",
+		server.URL, AuthorizationEndpoint, regResp.ClientID,
+		url.QueryEscape("http://localhost:8080/callback"))
+
+	callbackURL := testAuthFlowWithURL(t, server.URL, authURL)
+
+	// Server should have generated a state and echoed it back
+	require.NotEmpty(t, callbackURL.Query().Get("state"), "server should generate a state when client sends empty state")
+
+	// Exchange authorization code for tokens
+	code := callbackURL.Query().Get("code")
+	tokenReq := url.Values{}
+	tokenReq.Set("grant_type", "authorization_code")
+	tokenReq.Set("code", code)
+	tokenReq.Set("redirect_uri", "http://localhost:8080/callback")
+	tokenReq.Set("client_id", regResp.ClientID)
+	tokenReq.Set("client_secret", regResp.ClientSecret)
+
+	tokenResp, err := http.PostForm(server.URL+TokenEndpoint, tokenReq)
+	require.NoError(t, err)
+	defer tokenResp.Body.Close()
+
+	require.Equal(t, http.StatusOK, tokenResp.StatusCode)
+
+	var tokenResult map[string]any
+	err = json.NewDecoder(tokenResp.Body).Decode(&tokenResult)
+	require.NoError(t, err)
+	require.NotEmpty(t, tokenResult["access_token"])
+}
+
+func TestAccessTokenAudienceClaim(t *testing.T) {
+	server, _, _ := setupTestServer(t)
+	regResp := registerTestClient(t, server.URL)
+
+	config := &oauth2.Config{
+		ClientID:     regResp.ClientID,
+		ClientSecret: regResp.ClientSecret,
+		RedirectURL:  "http://localhost:8080/callback",
+		Scopes:       []string{},
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  server.URL + AuthorizationEndpoint,
+			TokenURL: server.URL + TokenEndpoint,
+		},
+	}
+
+	callbackURL := testAuthFlowWithURL(t, server.URL, config.AuthCodeURL("test-state"))
+	code := callbackURL.Query().Get("code")
+
+	tokenReq := url.Values{}
+	tokenReq.Set("grant_type", "authorization_code")
+	tokenReq.Set("code", code)
+	tokenReq.Set("redirect_uri", "http://localhost:8080/callback")
+	tokenReq.Set("client_id", regResp.ClientID)
+	tokenReq.Set("client_secret", regResp.ClientSecret)
+
+	tokenResp, err := http.PostForm(server.URL+TokenEndpoint, tokenReq)
+	require.NoError(t, err)
+	defer tokenResp.Body.Close()
+	require.Equal(t, http.StatusOK, tokenResp.StatusCode)
+
+	var tokenResult map[string]any
+	err = json.NewDecoder(tokenResp.Body).Decode(&tokenResult)
+	require.NoError(t, err)
+
+	accessToken := tokenResult["access_token"].(string)
+
+	// Decode JWT payload and verify aud claim contains the external URL
+	parts := strings.Split(accessToken, ".")
+	require.Len(t, parts, 3, "access token should be a JWT with 3 parts")
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+
+	var claims map[string]any
+	err = json.Unmarshal(payload, &claims)
+	require.NoError(t, err)
+
+	aud, ok := claims["aud"].([]any)
+	require.True(t, ok, "aud claim should be present as an array")
+	require.Contains(t, aud, "http://localhost:8080", "aud should contain the external URL")
 }

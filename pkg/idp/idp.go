@@ -116,6 +116,22 @@ func (a *IDPRouter) SetupRoutes(router gin.IRouter) {
 func (a *IDPRouter) handleAuth(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	// RFC 6749 makes state RECOMMENDED, not REQUIRED, but fosite enforces
+	// minimum entropy (8 chars). Generate a server-side state for clients
+	// that omit it (e.g., MCP Inspector, Cursor CLI) so they can complete
+	// the OAuth flow. The generated state is echoed back in the redirect;
+	// clients that didn't send state will simply ignore it.
+	if c.Request.URL.Query().Get("state") == "" {
+		state, err := utils.GenerateState()
+		if err != nil {
+			a.provider.WriteAuthorizeError(ctx, c.Writer, nil, fosite.ErrServerError.WithWrap(err))
+			return
+		}
+		q := c.Request.URL.Query()
+		q.Set("state", state)
+		c.Request.URL.RawQuery = q.Encode()
+	}
+
 	ar, err := a.provider.NewAuthorizeRequest(ctx, c.Request)
 	if err != nil {
 		a.provider.WriteAuthorizeError(ctx, c.Writer, ar, err)
@@ -144,6 +160,7 @@ func (a *IDPRouter) handleAuthorizationReturn(c *gin.Context) {
 	for _, scope := range ar.GetRequestedScopes() {
 		ar.GrantScope(scope)
 	}
+	ar.GrantAudience(a.externalURL)
 
 	session := sessions.Default(c)
 	subject := "user"
@@ -281,6 +298,7 @@ func (a *IDPRouter) handleRegister(c *gin.Context) {
 		GrantTypes:    req.GrantTypes,
 		ResponseTypes: req.ResponseTypes,
 		Scopes:        strings.Fields(req.Scope),
+		Audience:      []string{a.externalURL},
 		Public:        isPublic,
 	}
 	if err := a.repo.RegisterClient(ctx, client); err != nil {

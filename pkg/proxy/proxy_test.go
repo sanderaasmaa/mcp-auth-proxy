@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -194,6 +195,32 @@ func TestProxyRouter_HeaderMapping(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestProxyRouter_ProtectedResourceTrailingSlash(t *testing.T) {
+	_, publicKey, err := generateRSAKeyPair()
+	require.NoError(t, err)
+
+	proxyRouter, err := NewProxyRouter("https://example.com/", http.NotFoundHandler(), publicKey, http.Header{}, false, nil)
+	require.NoError(t, err)
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	proxyRouter.SetupRoutes(router)
+
+	req, err := http.NewRequest("GET", OauthProtectedResourceEndpoint, nil)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp protectedResourceResponse
+	err = json.NewDecoder(w.Body).Decode(&resp)
+	require.NoError(t, err)
+	assert.Equal(t, "https://example.com/", resp.Resource)
+	assert.Equal(t, []string{"https://example.com/"}, resp.AuthorizationServers)
 }
 
 func TestProxyRouter_HTTPStreamingOnlyRejectsSSE(t *testing.T) {

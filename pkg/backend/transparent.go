@@ -125,6 +125,7 @@ func (p *TransparentBackend) Run(ctx context.Context) (http.Handler, error) {
 			base:       http.DefaultTransport,
 			targetHost: p.url.Host,
 		},
+		FlushInterval: -1,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(p.url)
 			if p.isTrusted(pr.In.RemoteAddr) {
