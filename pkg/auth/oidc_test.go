@@ -167,7 +167,7 @@ func TestOIDCProviderAuthorization(t *testing.T) {
 			})
 
 			// Call the Authorization method
-			ok, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
+			ok, _, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
 			require.NoError(t, err)
 			require.Equal(t, tt.expect, ok)
 		})
@@ -224,7 +224,7 @@ func TestOIDCProviderErrors(t *testing.T) {
 			c.JSON(http.StatusOK, gin.H{"sub": "user1"})
 		})
 
-		ok, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
+		ok, _, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
 		require.Error(t, err)
 		require.False(t, ok)
 	})
@@ -237,7 +237,7 @@ func TestOIDCProviderErrors(t *testing.T) {
 			c.JSON(http.StatusOK, gin.H{"sub": 12345})
 		})
 
-		ok, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
+		ok, _, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
 		require.Error(t, err)
 		require.False(t, ok)
 	})
@@ -250,7 +250,7 @@ func TestOIDCProviderErrors(t *testing.T) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "server error"})
 		})
 
-		ok, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
+		ok, _, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
 		require.Error(t, err)
 		require.False(t, ok)
 	})
@@ -316,7 +316,7 @@ func TestOIDCProviderGlobPatterns(t *testing.T) {
 			provider.userInfoURL = tsUser.URL + "/userinfo"
 
 			// Test authorization
-			authorized, userID, err := provider.Authorization(context.Background(), &oauth2.Token{AccessToken: "test"})
+			authorized, userID, _, err := provider.Authorization(context.Background(), &oauth2.Token{AccessToken: "test"})
 			require.NoError(t, err)
 			require.Equal(t, tc.email, userID)
 			require.Equal(t, tc.expected, authorized, "Expected %v for email %s", tc.expected, tc.email)
@@ -449,7 +449,7 @@ func TestOIDCProviderAttributeMatching(t *testing.T) {
 			provider.userInfoURL = tsUser.URL + "/userinfo"
 
 			// Test authorization
-			authorized, _, err := provider.Authorization(context.Background(), &oauth2.Token{AccessToken: "test"})
+			authorized, _, _, err := provider.Authorization(context.Background(), &oauth2.Token{AccessToken: "test"})
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, authorized, "Expected %v for test case %s", tc.expected, tc.name)
 		})

@@ -168,7 +168,7 @@ func TestGitHubProviderAuthorization(t *testing.T) {
 			})
 
 			// Call the Authorization method
-			ok, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
+			ok, _, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
 			require.NoError(t, err)
 			require.Equal(t, expect, ok)
 		})

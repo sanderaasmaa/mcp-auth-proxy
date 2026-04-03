@@ -15,5 +15,5 @@ type Provider interface {
 	AuthURL() string
 	AuthCodeURL(state string) (string, error)
 	Exchange(c *gin.Context, state string) (*oauth2.Token, error)
-	Authorization(ctx context.Context, token *oauth2.Token) (bool, string, error)
+	Authorization(ctx context.Context, token *oauth2.Token) (bool, string, map[string]any, error)
 }

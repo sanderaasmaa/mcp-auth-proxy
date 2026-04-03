@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/rsa"
 	"encoding/base64"
+	"encoding/json"
 	"math/big"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
@@ -159,7 +161,18 @@ func (a *IDPRouter) handleAuthorizationReturn(c *gin.Context) {
 		ar.GrantScope(scope)
 	}
 	ar.GrantAudience(a.externalURL)
-	jwtSession, err := NewJWTSessionWithKey(a.externalURL, "user", a.privKey)
+
+	session := sessions.Default(c)
+	subject := "user"
+	if userID, ok := session.Get(auth.SessionKeyUserID).(string); ok && userID != "" {
+		subject = userID
+	}
+	var userInfo map[string]any
+	if userInfoJSON, ok := session.Get(auth.SessionKeyUserInfo).(string); ok && userInfoJSON != "" {
+		json.Unmarshal([]byte(userInfoJSON), &userInfo)
+	}
+
+	jwtSession, err := NewJWTSessionWithKey(a.externalURL, subject, a.privKey, userInfo)
 	if err != nil {
 		a.logger.With(utils.Err(err)...).Error("Failed to create JWT session", zap.Error(err))
 		a.provider.WriteAuthorizeError(ctx, c.Writer, ar, err)
@@ -179,7 +192,7 @@ func (a *IDPRouter) handleAuthorizationReturn(c *gin.Context) {
 func (a *IDPRouter) handleToken(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	session, err := NewJWTSessionWithKey("", "", a.privKey)
+	session, err := NewJWTSessionWithKey("", "", a.privKey, nil)
 	if err != nil {
 		a.logger.With(utils.Err(err)...).Error("Failed to create JWT session for token", zap.Error(err))
 		a.provider.WriteAccessError(ctx, c.Writer, nil, fosite.ErrServerError.WithWrap(err))
@@ -205,7 +218,7 @@ func (a *IDPRouter) handleToken(c *gin.Context) {
 
 func (a *IDPRouter) handleIntrospect(c *gin.Context) {
 	ctx := c.Request.Context()
-	session, err := NewJWTSessionWithKey("", "", a.privKey)
+	session, err := NewJWTSessionWithKey("", "", a.privKey, nil)
 	if err != nil {
 		a.provider.WriteIntrospectionError(ctx, c.Writer, fosite.ErrServerError.WithWrap(err))
 		return
@@ -410,10 +423,14 @@ func (a *IDPRouter) handleJWKS(c *gin.Context) {
 	c.JSON(200, ks)
 }
 
-func NewJWTSessionWithKey(iss string, subject string, privateKey *rsa.PrivateKey) (*Session, error) {
+func NewJWTSessionWithKey(iss string, subject string, privateKey *rsa.PrivateKey, userInfo map[string]any) (*Session, error) {
 	keyID, err := utils.GenerateKeyID(&privateKey.PublicKey)
 	if err != nil {
 		return nil, err
+	}
+	var extra map[string]any
+	if userInfo != nil {
+		extra = map[string]any{"userinfo": userInfo}
 	}
 	return &Session{
 		DefaultSession: &fosite.DefaultSession{
@@ -427,6 +444,7 @@ func NewJWTSessionWithKey(iss string, subject string, privateKey *rsa.PrivateKey
 			ExpiresAt: time.Now().Add(time.Hour),
 			IssuedAt:  time.Now(),
 			NotBefore: time.Now(),
+			Extra:     extra,
 		},
 		JWTHeader: &jwt.Headers{
 			Extra: map[string]any{
@@ -468,6 +486,7 @@ func (s *Session) Clone() fosite.Session {
 			ExpiresAt: s.JWTClaims.ExpiresAt,
 			IssuedAt:  s.JWTClaims.IssuedAt,
 			NotBefore: s.JWTClaims.NotBefore,
+			Extra:     s.JWTClaims.Extra,
 		},
 		JWTHeader: &jwt.Headers{
 			Extra: make(map[string]any),

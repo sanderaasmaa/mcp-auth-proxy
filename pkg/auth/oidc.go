@@ -128,40 +128,44 @@ func (p *oidcProvider) Exchange(c *gin.Context, state string) (*oauth2.Token, er
 	return token, nil
 }
 
-func (p *oidcProvider) Authorization(ctx context.Context, token *oauth2.Token) (bool, string, error) {
+func (p *oidcProvider) Authorization(ctx context.Context, token *oauth2.Token) (bool, string, map[string]any, error) {
 	client := p.oauth2.Client(ctx, token)
 	resp, err := client.Get(p.userInfoURL)
 	if err != nil {
-		return false, "", err
+		return false, "", nil, err
 	}
 	defer resp.Body.Close()
 	var obj any
 	if err := json.NewDecoder(resp.Body).Decode(&obj); err != nil {
-		return false, "", err
+		return false, "", nil, err
+	}
+	userInfoMap, ok := obj.(map[string]any)
+	if !ok {
+		return false, "", nil, errors.New("userinfo response is not a JSON object")
 	}
 	v, err := jsonpointer.Get(obj, p.userIDField)
 	if err != nil {
-		return false, "", err
+		return false, "", nil, err
 	}
 	userID, ok := v.(string)
 	if !ok {
-		return false, "", errors.New("user ID field is not a string")
+		return false, "", nil, errors.New("user ID field is not a string")
 	}
 
 	// If no restrictions are set, allow all users
 	if len(p.allowedUsers) == 0 && len(p.allowedUsersGlob) == 0 && len(p.allowedAttributes) == 0 && len(p.allowedAttributesGlob) == 0 {
-		return true, userID, nil
+		return true, userID, userInfoMap, nil
 	}
 
 	// Check exact user matches first
 	if slices.Contains(p.allowedUsers, userID) {
-		return true, userID, nil
+		return true, userID, userInfoMap, nil
 	}
 
 	// Check user glob patterns
 	for _, g := range p.allowedUsersGlob {
 		if g.Match(userID) {
-			return true, userID, nil
+			return true, userID, userInfoMap, nil
 		}
 	}
 
@@ -172,7 +176,7 @@ func (p *oidcProvider) Authorization(ctx context.Context, token *oauth2.Token) (
 			continue // Attribute not found, skip
 		}
 		if matchAttributeValue(attrValue, allowedValues) {
-			return true, userID, nil
+			return true, userID, userInfoMap, nil
 		}
 	}
 
@@ -183,11 +187,11 @@ func (p *oidcProvider) Authorization(ctx context.Context, token *oauth2.Token) (
 			continue // Attribute not found, skip
 		}
 		if matchAttributeGlob(attrValue, globs) {
-			return true, userID, nil
+			return true, userID, userInfoMap, nil
 		}
 	}
 
-	return false, userID, nil
+	return false, userID, userInfoMap, nil
 }
 
 // matchAttributeValue checks if an attribute value matches any of the allowed values.

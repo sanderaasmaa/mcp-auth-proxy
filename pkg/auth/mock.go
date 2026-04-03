@@ -72,13 +72,14 @@ func (mr *MockProviderMockRecorder) AuthURL() *gomock.Call {
 }
 
 // Authorization mocks base method.
-func (m *MockProvider) Authorization(ctx context.Context, token *oauth2.Token) (bool, string, error) {
+func (m *MockProvider) Authorization(ctx context.Context, token *oauth2.Token) (bool, string, map[string]any, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Authorization", ctx, token)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(string)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret2, _ := ret[2].(map[string]any)
+	ret3, _ := ret[3].(error)
+	return ret0, ret1, ret2, ret3
 }
 
 // Authorization indicates an expected call of Authorization.
