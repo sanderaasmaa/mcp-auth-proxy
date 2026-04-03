@@ -300,6 +300,10 @@ func Run(
 	router := gin.New()
 	router.SetTrustedProxies(trustedProxy)
 
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+
 	router.Use(ginzap.Ginzap(logger, time.RFC3339, true))
 	router.Use(ginzap.RecoveryWithZap(logger, true))
 	store := cookie.NewStore(secret)
