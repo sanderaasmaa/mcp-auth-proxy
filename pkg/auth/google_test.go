@@ -156,7 +156,7 @@ func TestGoogleProviderAuthorization(t *testing.T) {
 				c.Data(http.StatusOK, "application/json", []byte(tt.userResp))
 			})
 
-			ok, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
+			ok, _, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
 			require.NoError(t, err)
 			require.Equal(t, tt.expect, ok)
 		})
@@ -170,7 +170,7 @@ func TestGoogleProviderAuthorizationAPIError(t *testing.T) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 	})
 
-	ok, user, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
+	ok, user, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
 	require.Error(t, err)
 	require.False(t, ok)
 	require.Empty(t, user)
@@ -184,7 +184,7 @@ func TestGoogleProviderAuthorizationInvalidJSON(t *testing.T) {
 		c.Data(http.StatusOK, "application/json", []byte(`invalid json`))
 	})
 
-	ok, user, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
+	ok, user, _, err := p.Authorization(context.Background(), &oauth2.Token{AccessToken: "test-access-token"})
 	require.Error(t, err)
 	require.False(t, ok)
 	require.Empty(t, user)

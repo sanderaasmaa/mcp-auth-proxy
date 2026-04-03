@@ -83,38 +83,36 @@ func (p *googleProvider) Exchange(c *gin.Context, state string) (*oauth2.Token, 
 	return token, nil
 }
 
-func (p *googleProvider) Authorization(ctx context.Context, token *oauth2.Token) (bool, string, error) {
+func (p *googleProvider) Authorization(ctx context.Context, token *oauth2.Token) (bool, string, map[string]any, error) {
 	client := p.oauth2.Client(ctx, token)
 	resp, err := client.Get(p.userinfoEndpoint)
 	if err != nil {
-		return false, "", err
+		return false, "", nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return false, "", errors.New("failed to get user info from Google API: " + resp.Status)
+		return false, "", nil, errors.New("failed to get user info from Google API: " + resp.Status)
 	}
 	defer resp.Body.Close()
 
-	var userInfo struct {
-		Sub   string `json:"sub"`
-		Name  string `json:"name"`
-		Email string `json:"email"`
-		HD    string `json:"hd"`
+	var userInfoMap map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&userInfoMap); err != nil {
+		return false, "", nil, err
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return false, "", err
-	}
+
+	email, _ := userInfoMap["email"].(string)
+	hd, _ := userInfoMap["hd"].(string)
 
 	if len(p.allowedUsers) == 0 && len(p.allowedWorkspaces) == 0 {
-		return true, userInfo.Email, nil
+		return true, email, userInfoMap, nil
 	}
 
-	if slices.Contains(p.allowedUsers, userInfo.Email) {
-		return true, userInfo.Email, nil
+	if slices.Contains(p.allowedUsers, email) {
+		return true, email, userInfoMap, nil
 	}
 
-	if slices.Contains(p.allowedWorkspaces, userInfo.HD) {
-		return true, userInfo.Email, nil
+	if slices.Contains(p.allowedWorkspaces, hd) {
+		return true, email, userInfoMap, nil
 	}
 
-	return false, userInfo.Email, nil
+	return false, email, userInfoMap, nil
 }

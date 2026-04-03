@@ -85,30 +85,30 @@ func (p *githubProvider) Exchange(c *gin.Context, state string) (*oauth2.Token, 
 	return token, nil
 }
 
-func (p *githubProvider) Authorization(ctx context.Context, token *oauth2.Token) (bool, string, error) {
+func (p *githubProvider) Authorization(ctx context.Context, token *oauth2.Token) (bool, string, map[string]any, error) {
 	client := p.oauth2.Client(ctx, token)
 	resp1, err := client.Get(utils.Must(url.JoinPath(p.endpoint, "/user")))
 	if err != nil {
-		return false, "", err
+		return false, "", nil, err
 	}
 	if resp1.StatusCode < 200 || resp1.StatusCode >= 300 {
-		return false, "", errors.New("failed to get user info from GitHub API: " + resp1.Status)
+		return false, "", nil, errors.New("failed to get user info from GitHub API: " + resp1.Status)
 	}
 	defer resp1.Body.Close()
 
-	var userInfo struct {
-		Login string `json:"login"`
+	var userInfoMap map[string]any
+	if err := json.NewDecoder(resp1.Body).Decode(&userInfoMap); err != nil {
+		return false, "", nil, err
 	}
-	if err := json.NewDecoder(resp1.Body).Decode(&userInfo); err != nil {
-		return false, "", err
-	}
+
+	login, _ := userInfoMap["login"].(string)
 
 	if len(p.allowedUsers) == 0 && len(p.allowedOrgs) == 0 {
-		return true, userInfo.Login, nil
+		return true, login, userInfoMap, nil
 	}
 
-	if slices.Contains(p.allowedUsers, userInfo.Login) {
-		return true, userInfo.Login, nil
+	if slices.Contains(p.allowedUsers, login) {
+		return true, login, userInfoMap, nil
 	}
 
 	allowedOrgTeams := []string{}
@@ -124,31 +124,31 @@ func (p *githubProvider) Authorization(ctx context.Context, token *oauth2.Token)
 	if len(allowedOrgs) > 0 {
 		resp2, err := client.Get(utils.Must(url.JoinPath(p.endpoint, "/user/orgs")))
 		if err != nil {
-			return false, "", err
+			return false, "", nil, err
 		}
 		if resp2.StatusCode < 200 || resp2.StatusCode >= 300 {
-			return false, "", errors.New("failed to get user info from GitHub API: " + resp2.Status)
+			return false, "", nil, errors.New("failed to get user info from GitHub API: " + resp2.Status)
 		}
 		defer resp2.Body.Close()
 		var orgInfo []struct {
 			Login string `json:"login"`
 		}
 		if err := json.NewDecoder(resp2.Body).Decode(&orgInfo); err != nil {
-			return false, "", err
+			return false, "", nil, err
 		}
 		for _, o := range orgInfo {
 			if slices.Contains(allowedOrgs, o.Login) {
-				return true, userInfo.Login, nil
+				return true, login, userInfoMap, nil
 			}
 		}
 	}
 	if len(allowedOrgTeams) > 0 {
 		resp3, err := client.Get(utils.Must(url.JoinPath(p.endpoint, "/user/teams")))
 		if err != nil {
-			return false, "", err
+			return false, "", nil, err
 		}
 		if resp3.StatusCode < 200 || resp3.StatusCode >= 300 {
-			return false, "", errors.New("failed to get user info from GitHub API: " + resp3.Status)
+			return false, "", nil, errors.New("failed to get user info from GitHub API: " + resp3.Status)
 		}
 		defer resp3.Body.Close()
 		var teamInfo []struct {
@@ -158,14 +158,14 @@ func (p *githubProvider) Authorization(ctx context.Context, token *oauth2.Token)
 			Slug string `json:"slug"`
 		}
 		if err := json.NewDecoder(resp3.Body).Decode(&teamInfo); err != nil {
-			return false, "", err
+			return false, "", nil, err
 		}
 		for _, team := range teamInfo {
 			if slices.Contains(allowedOrgTeams, team.Organization.Login+":"+team.Slug) {
-				return true, userInfo.Login, nil
+				return true, login, userInfoMap, nil
 			}
 		}
 	}
 
-	return false, userInfo.Login, nil
+	return false, login, userInfoMap, nil
 }

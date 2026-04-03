@@ -85,7 +85,7 @@ func TestAuthenticationFlow(t *testing.T) {
 		mockProvider.EXPECT().RedirectURL().Return("/.auth/test/callback").AnyTimes()
 		mockProvider.EXPECT().AuthCodeURL(gomock.Any()).Return("https://example.com/oauth", nil)
 		mockProvider.EXPECT().Exchange(gomock.Any(), gomock.Any()).Return(mockToken, nil)
-		mockProvider.EXPECT().Authorization(gomock.Any(), mockToken).Return(true, "authorized_user", nil)
+		mockProvider.EXPECT().Authorization(gomock.Any(), mockToken).Return(true, "authorized_user", map[string]any{"email": "authorized_user@example.com"}, nil)
 
 		// Create AuthRouter
 		authRouter, err := NewAuthRouter(nil, false, mockProvider)
@@ -146,7 +146,7 @@ func TestAuthenticationFlow(t *testing.T) {
 		mockProvider.EXPECT().RedirectURL().Return("/.auth/test/callback").AnyTimes()
 		mockProvider.EXPECT().AuthCodeURL(gomock.Any()).Return("https://example.com/oauth", nil)
 		mockProvider.EXPECT().Exchange(gomock.Any(), gomock.Any()).Return(mockToken, nil)
-		mockProvider.EXPECT().Authorization(gomock.Any(), mockToken).Return(false, "unauthorized_user", nil)
+		mockProvider.EXPECT().Authorization(gomock.Any(), mockToken).Return(false, "unauthorized_user", map[string]any{"email": "unauthorized_user@example.com"}, nil)
 
 		// Create AuthRouter
 		authRouter, err := NewAuthRouter(nil, false, mockProvider)

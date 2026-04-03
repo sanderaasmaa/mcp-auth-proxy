@@ -2,6 +2,7 @@ package auth
 
 import (
 	"embed"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"net/http"
@@ -68,6 +69,8 @@ const (
 	SessionKeyAuthorized  = "authorized"
 	SessionKeyRedirectURL = "redirect_url"
 	SessionKeyOAuthState  = "oauth_state"
+	SessionKeyUserID      = "user_id"
+	SessionKeyUserInfo    = "user_info"
 )
 
 func (a *AuthRouter) SetupRoutes(router gin.IRouter) {
@@ -87,7 +90,7 @@ func (a *AuthRouter) SetupRoutes(router gin.IRouter) {
 				a.renderError(c, err)
 				return
 			}
-			ok, user, err := provider.Authorization(c, token)
+			ok, user, userInfo, err := provider.Authorization(c, token)
 			if err != nil {
 				a.renderError(c, err)
 				return
@@ -97,6 +100,12 @@ func (a *AuthRouter) SetupRoutes(router gin.IRouter) {
 				return
 			}
 			session.Set(SessionKeyAuthorized, true)
+			session.Set(SessionKeyUserID, user)
+			if userInfo != nil {
+				if userInfoJSON, err := json.Marshal(userInfo); err == nil {
+					session.Set(SessionKeyUserInfo, string(userInfoJSON))
+				}
+			}
 			redirectURL := session.Get(SessionKeyRedirectURL)
 			if redirectURL != nil {
 				session.Delete(SessionKeyRedirectURL)
@@ -177,6 +186,7 @@ func (a *AuthRouter) handleLoginPost(c *gin.Context) {
 
 	session := sessions.Default(c)
 	session.Set(SessionKeyAuthorized, true)
+	session.Set(SessionKeyUserID, PasswordUserID)
 	redirectURL := session.Get(SessionKeyRedirectURL)
 	if redirectURL != nil {
 		session.Delete(SessionKeyRedirectURL)

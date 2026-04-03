@@ -17,7 +17,7 @@ func TestRun_PassesHTTPStreamingOnlyToProxyRouter(t *testing.T) {
 	})
 
 	var streamingOnlyReceived bool
-	newProxyRouter = func(externalURL string, proxyHandler http.Handler, publicKey *rsa.PublicKey, proxyHeaders http.Header, httpStreamingOnly bool) (*proxy.ProxyRouter, error) {
+	newProxyRouter = func(externalURL string, proxyHandler http.Handler, publicKey *rsa.PublicKey, proxyHeaders http.Header, httpStreamingOnly bool, headerMapping map[string]string) (*proxy.ProxyRouter, error) {
 		streamingOnlyReceived = httpStreamingOnly
 		return nil, errors.New("proxy router init failed")
 	}
@@ -61,6 +61,7 @@ func TestRun_PassesHTTPStreamingOnlyToProxyRouter(t *testing.T) {
 		"",
 		[]string{"http://example.com"},
 		true,
+		nil,
 	)
 
 	require.Error(t, err)

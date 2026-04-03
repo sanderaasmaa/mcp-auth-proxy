@@ -91,6 +91,30 @@ func parseAttributeMap(s string) map[string][]string {
 	return result
 }
 
+func parseHeaderMapping(s string) map[string]string {
+	result := make(map[string]string)
+	if s == "" {
+		return result
+	}
+	parts := splitWithEscapes(s, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		colonIdx := strings.LastIndex(part, ":")
+		if colonIdx == -1 {
+			continue
+		}
+		pointer := strings.TrimSpace(part[:colonIdx])
+		header := strings.TrimSpace(part[colonIdx+1:])
+		if pointer != "" && header != "" {
+			result[pointer] = header
+		}
+	}
+	return result
+}
+
 type proxyRunnerFunc func(
 	listen string,
 	tlsListen string,
@@ -130,6 +154,7 @@ type proxyRunnerFunc func(
 	proxyBearerToken string,
 	proxyTarget []string,
 	httpStreamingOnly bool,
+	headerMapping map[string]string,
 ) error
 
 func main() {
@@ -174,6 +199,7 @@ func newRootCommand(run proxyRunnerFunc) *cobra.Command {
 	var passwordHash string
 	var proxyBearerToken string
 	var proxyHeaders string
+	var headerMapping string
 	var httpStreamingOnly bool
 	var trustedProxies string
 
@@ -255,6 +281,8 @@ func newRootCommand(run proxyRunnerFunc) *cobra.Command {
 				}
 			}
 
+			headerMappingMap := parseHeaderMapping(headerMapping)
+
 			if err := run(
 				listen,
 				tlsListen,
@@ -294,6 +322,7 @@ func newRootCommand(run proxyRunnerFunc) *cobra.Command {
 				proxyBearerToken,
 				args,
 				httpStreamingOnly,
+				headerMappingMap,
 			); err != nil {
 				panic(err)
 			}
@@ -347,6 +376,7 @@ func newRootCommand(run proxyRunnerFunc) *cobra.Command {
 	rootCmd.Flags().StringVar(&trustedProxies, "trusted-proxies", getEnvWithDefault("TRUSTED_PROXIES", ""), "Comma-separated list of trusted proxies (IP addresses or CIDR ranges)")
 	rootCmd.Flags().StringVar(&proxyHeaders, "proxy-headers", getEnvWithDefault("PROXY_HEADERS", ""), "Comma-separated list of headers to add when proxying requests (format: Header1:Value1,Header2:Value2)")
 	rootCmd.Flags().BoolVar(&httpStreamingOnly, "http-streaming-only", getEnvBoolWithDefault("HTTP_STREAMING_ONLY", false), "Reject SSE (GET) requests and keep the backend in HTTP streaming-only mode")
+	rootCmd.Flags().StringVar(&headerMapping, "header-mapping", getEnvWithDefault("HEADER_MAPPING", ""), "Comma-separated mapping of userinfo JSON pointer paths to header names (e.g., /email:X-Forwarded-Email,/preferred_username:X-Forwarded-User)")
 
 	return rootCmd
 }

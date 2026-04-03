@@ -168,6 +168,64 @@ func TestParseAttributeMap(t *testing.T) {
 	}
 }
 
+func TestParseHeaderMapping(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected map[string]string
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: map[string]string{},
+		},
+		{
+			name:  "single mapping",
+			input: "/email:X-Forwarded-Email",
+			expected: map[string]string{
+				"/email": "X-Forwarded-Email",
+			},
+		},
+		{
+			name:  "multiple mappings",
+			input: "/email:X-Forwarded-Email,/preferred_username:X-Forwarded-User",
+			expected: map[string]string{
+				"/email":              "X-Forwarded-Email",
+				"/preferred_username": "X-Forwarded-User",
+			},
+		},
+		{
+			name:  "nested JSON pointer",
+			input: "/org/team:X-Forwarded-Team",
+			expected: map[string]string{
+				"/org/team": "X-Forwarded-Team",
+			},
+		},
+		{
+			name:  "whitespace trimming",
+			input: " /email : X-Forwarded-Email , /sub : X-Forwarded-Sub ",
+			expected: map[string]string{
+				"/email": "X-Forwarded-Email",
+				"/sub":   "X-Forwarded-Sub",
+			},
+		},
+		{
+			name:     "no colon - skipped",
+			input:    "invalid",
+			expected: map[string]string{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := parseHeaderMapping(tc.input)
+			if !reflect.DeepEqual(result, tc.expected) {
+				t.Errorf("Expected %v, got %v", tc.expected, result)
+			}
+		})
+	}
+}
+
 func TestGetEnvWithDefault(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -344,6 +402,7 @@ func TestNewRootCommand_HTTPStreamingOnlyFlag(t *testing.T) {
 		proxyBearerToken string,
 		proxyTarget []string,
 		httpStreamingOnly bool,
+		headerMapping map[string]string,
 	) error {
 		streamingOnly = httpStreamingOnly
 		receivedTargets = proxyTarget
@@ -407,6 +466,7 @@ func TestNewRootCommand_HTTPStreamingOnlyFromEnv(t *testing.T) {
 		proxyBearerToken string,
 		proxyTarget []string,
 		httpStreamingOnly bool,
+		headerMapping map[string]string,
 	) error {
 		streamingOnly = httpStreamingOnly
 		return nil
