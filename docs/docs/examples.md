@@ -136,6 +136,96 @@ spec:
                   number: 80
 ```
 
+#### Multi-Replica (High Availability)
+
+By using a shared database backend (`postgres` or `mysql`) and injecting cryptographic keys via environment variables (`AUTH_HMAC_SECRET`, `JWT_PRIVATE_KEY`), replicas become fully stateless — no PVC or sticky sessions needed.
+
+See [#84](https://github.com/sigbit/mcp-auth-proxy/issues/84) and [#110](https://github.com/sigbit/mcp-auth-proxy/issues/110) for background.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-auth-proxy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mcp-auth-proxy
+  template:
+    metadata:
+      labels:
+        app: mcp-auth-proxy
+    spec:
+      containers:
+        - name: mcp-auth-proxy
+          image: ghcr.io/sigbit/mcp-auth-proxy:latest
+          ports:
+            - containerPort: 80
+          env:
+            - name: EXTERNAL_URL
+              value: "https://{your-domain}"
+            - name: NO_AUTO_TLS
+              value: "true"
+            - name: REPOSITORY_BACKEND
+              value: "postgres"
+            - name: REPOSITORY_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-auth-proxy-secrets
+                  key: repository-dsn
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-auth-proxy-secrets
+                  key: password
+            - name: AUTH_HMAC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-auth-proxy-keys
+                  key: auth-hmac-secret
+            - name: JWT_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-auth-proxy-keys
+                  key: jwt-private-key
+          args: ["npx", "-y", "@modelcontextprotocol/server-filesystem", "./"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-auth-proxy
+spec:
+  selector:
+    app: mcp-auth-proxy
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-auth-proxy
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  tls:
+    - hosts:
+        - { your-domain }
+      secretName: mcp-auth-proxy-tls
+  rules:
+    - host: { your-domain }
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-auth-proxy
+                port:
+                  number: 80
+```
+
 #### Sidecar Pattern
 
 The sidecar pattern allows you to add authentication to any SSE-based MCP server. The auth proxy runs as a sidecar container in the same pod, authenticating requests before forwarding them to your MCP server.
