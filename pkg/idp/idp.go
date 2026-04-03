@@ -142,6 +142,7 @@ func (a *IDPRouter) handleAuthorizationReturn(c *gin.Context) {
 	for _, scope := range ar.GetRequestedScopes() {
 		ar.GrantScope(scope)
 	}
+	ar.GrantAudience(a.externalURL)
 	jwtSession, err := NewJWTSessionWithKey(a.externalURL, "user", a.privKey)
 	if err != nil {
 		a.logger.With(utils.Err(err)...).Error("Failed to create JWT session", zap.Error(err))
@@ -268,6 +269,7 @@ func (a *IDPRouter) handleRegister(c *gin.Context) {
 		GrantTypes:    req.GrantTypes,
 		ResponseTypes: req.ResponseTypes,
 		Scopes:        strings.Fields(req.Scope),
+		Audience:      []string{a.externalURL},
 		Public:        isPublic,
 	}
 	if err := a.repo.RegisterClient(ctx, client); err != nil {

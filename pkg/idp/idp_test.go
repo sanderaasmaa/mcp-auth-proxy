@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/cookiejar"
@@ -270,4 +271,96 @@ func TestPrivateClient(t *testing.T) {
 	require.True(t, ok)
 	require.NotEmpty(t, newAccessToken)
 	require.NotEqual(t, originalAccessToken, newAccessToken, "Access token should be different after refresh")
+}
+
+func TestAccessTokenAudienceClaim(t *testing.T) {
+	server, _, _ := setupTestServer(t)
+
+	// Register client
+	regReq := registrationRequest{
+		ClientName:              "Test Client",
+		GrantTypes:              []string{"authorization_code"},
+		ResponseTypes:           []string{"code"},
+		TokenEndpointAuthMethod: "client_secret_basic",
+		Scope:                   "test",
+		RedirectURIs:            []string{"http://localhost:8080/callback"},
+	}
+	reqBody, err := json.Marshal(regReq)
+	require.NoError(t, err)
+
+	resp, err := http.Post(server.URL+RegistrationEndpoint, "application/json", bytes.NewReader(reqBody))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusCreated, resp.StatusCode)
+
+	var regResp registrationResponse
+	err = json.NewDecoder(resp.Body).Decode(&regResp)
+	require.NoError(t, err)
+
+	// Run OAuth flow to get access token
+	config := &oauth2.Config{
+		ClientID:     regResp.ClientID,
+		ClientSecret: regResp.ClientSecret,
+		RedirectURL:  "http://localhost:8080/callback",
+		Scopes:       []string{},
+		Endpoint: oauth2.Endpoint{
+			AuthURL:  server.URL + AuthorizationEndpoint,
+			TokenURL: server.URL + TokenEndpoint,
+		},
+	}
+
+	jar, err := cookiejar.New(nil)
+	require.NoError(t, err)
+	client := &http.Client{
+		Jar: jar,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	authResp, err := client.Get(config.AuthCodeURL("test-state"))
+	require.NoError(t, err)
+	defer authResp.Body.Close()
+
+	authReturnResp, err := client.Get(server.URL + authResp.Header.Get("Location"))
+	require.NoError(t, err)
+	defer authReturnResp.Body.Close()
+
+	callbackURL, err := url.Parse(authReturnResp.Header.Get("Location"))
+	require.NoError(t, err)
+	code := callbackURL.Query().Get("code")
+	require.NotEmpty(t, code)
+
+	tokenReq := url.Values{}
+	tokenReq.Set("grant_type", "authorization_code")
+	tokenReq.Set("code", code)
+	tokenReq.Set("redirect_uri", "http://localhost:8080/callback")
+	tokenReq.Set("client_id", regResp.ClientID)
+	tokenReq.Set("client_secret", regResp.ClientSecret)
+
+	tokenResp, err := http.PostForm(server.URL+TokenEndpoint, tokenReq)
+	require.NoError(t, err)
+	defer tokenResp.Body.Close()
+	require.Equal(t, http.StatusOK, tokenResp.StatusCode)
+
+	var tokenResult map[string]any
+	err = json.NewDecoder(tokenResp.Body).Decode(&tokenResult)
+	require.NoError(t, err)
+
+	accessToken := tokenResult["access_token"].(string)
+
+	// Decode JWT payload and verify aud claim contains the external URL
+	parts := strings.Split(accessToken, ".")
+	require.Len(t, parts, 3, "access token should be a JWT with 3 parts")
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+
+	var claims map[string]any
+	err = json.Unmarshal(payload, &claims)
+	require.NoError(t, err)
+
+	aud, ok := claims["aud"].([]any)
+	require.True(t, ok, "aud claim should be present as an array")
+	require.Contains(t, aud, "http://localhost:8080", "aud should contain the external URL")
 }
