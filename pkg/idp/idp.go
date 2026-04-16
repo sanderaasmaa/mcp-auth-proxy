@@ -206,6 +206,25 @@ func (a *IDPRouter) handleToken(c *gin.Context) {
 		return
 	}
 
+	// Restore subject and userinfo from the stored authorization session.
+	// Fosite restores DefaultSession but not JWTClaims.Subject/Extra,
+	// so the access token JWT would be anonymous without this.
+	if stored, ok := accessRequest.GetSession().(*Session); ok {
+		if stored.DefaultSession != nil && stored.DefaultSession.Subject != "" {
+			session.JWTClaims.Subject = stored.DefaultSession.Subject
+			session.DefaultSession.Subject = stored.DefaultSession.Subject
+			session.DefaultSession.Username = stored.DefaultSession.Username
+		}
+		if stored.JWTClaims != nil {
+			if session.JWTClaims.Extra == nil && stored.JWTClaims.Extra != nil {
+				session.JWTClaims.Extra = stored.JWTClaims.Extra
+			}
+			if session.JWTClaims.Subject == "" && stored.JWTClaims.Subject != "" {
+				session.JWTClaims.Subject = stored.JWTClaims.Subject
+			}
+		}
+	}
+
 	response, err := a.provider.NewAccessResponse(ctx, accessRequest)
 	if err != nil {
 		a.logger.With(utils.Err(err)...).Error("Failed to create access response", zap.String("grant_type", c.PostForm("grant_type")), zap.Error(err))
