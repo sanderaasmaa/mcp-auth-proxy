@@ -224,6 +224,18 @@ func (r *kvsRepository) DeleteAuthorizeRequest(ctx context.Context, requestID st
 	return r.delete(ctx, "authorize_request-"+requestID)
 }
 
+func (r *kvsRepository) StoreIdentity(ctx context.Context, requestID string, identityJSON string) error {
+	return r.create(ctx, "identity-"+requestID, identityJSON)
+}
+
+func (r *kvsRepository) GetIdentity(ctx context.Context, requestID string) (string, error) {
+	var identity string
+	if err := r.get(ctx, "identity-"+requestID, &identity); err != nil {
+		return "", err
+	}
+	return identity, nil
+}
+
 func (r *kvsRepository) Close() error {
 	return r.db.Close()
 }

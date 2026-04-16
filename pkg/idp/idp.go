@@ -180,6 +180,15 @@ func (a *IDPRouter) handleAuthorizationReturn(c *gin.Context) {
 		return
 	}
 
+	// Store user identity separately — fosite's storage doesn't preserve
+	// custom session fields (JWTClaims.Subject/Extra) through the auth code
+	// exchange. We store them keyed by the auth request ID and read them
+	// back in handleToken after fosite resolves the code.
+	identity := &UserIdentity{Subject: subject, UserInfo: userInfo}
+	if identityJSON, err := json.Marshal(identity); err == nil {
+		a.repo.StoreIdentity(ctx, ar.GetID(), string(identityJSON))
+	}
+
 	response, err := a.provider.NewAuthorizeResponse(ctx, ar, jwtSession)
 	if err != nil {
 		a.logger.With(utils.Err(err)...).Error("Failed to generate authorization response", zap.Error(err))
@@ -207,36 +216,21 @@ func (a *IDPRouter) handleToken(c *gin.Context) {
 		return
 	}
 
-	// Debug: inspect what fosite restored into the session
-	restoredSession := accessRequest.GetSession()
-	log.Printf("[idp] DEBUG session type: %T", restoredSession)
-	if stored, ok := restoredSession.(*Session); ok {
-		log.Printf("[idp] DEBUG stored Session: subject=%q, username=%q, jwtClaims.Subject=%q, jwtClaims.Extra=%v",
-			stored.DefaultSession.Subject, stored.DefaultSession.Username,
-			stored.JWTClaims.Subject, stored.JWTClaims.Extra)
-	} else if ds, ok := restoredSession.(*fosite.DefaultSession); ok {
-		log.Printf("[idp] DEBUG DefaultSession only: subject=%q, username=%q", ds.Subject, ds.Username)
-	} else {
-		log.Printf("[idp] DEBUG unknown session type, value: %+v", restoredSession)
-	}
-
-	// Restore subject and userinfo from the stored authorization session.
-	if stored, ok := restoredSession.(*Session); ok {
-		if stored.DefaultSession != nil && stored.DefaultSession.Subject != "" {
-			session.JWTClaims.Subject = stored.DefaultSession.Subject
-			session.DefaultSession.Subject = stored.DefaultSession.Subject
-			session.DefaultSession.Username = stored.DefaultSession.Username
-		}
-		if stored.JWTClaims != nil {
-			if stored.JWTClaims.Extra != nil {
-				session.JWTClaims.Extra = stored.JWTClaims.Extra
+	// Restore user identity from our separate storage.
+	// Fosite's storage doesn't preserve custom JWT session fields,
+	// so we stored them separately in handleAuthorizationReturn.
+	reqID := accessRequest.GetID()
+	if identityJSON, err := a.repo.GetIdentity(ctx, reqID); err == nil && identityJSON != "" {
+		var identity UserIdentity
+		if err := json.Unmarshal([]byte(identityJSON), &identity); err == nil {
+			session.JWTClaims.Subject = identity.Subject
+			session.DefaultSession.Subject = identity.Subject
+			session.DefaultSession.Username = identity.Subject
+			if identity.UserInfo != nil {
+				session.JWTClaims.Extra = map[string]any{"userinfo": identity.UserInfo}
 			}
-			if stored.JWTClaims.Subject != "" {
-				session.JWTClaims.Subject = stored.JWTClaims.Subject
-			}
+			log.Printf("[idp] DEBUG restored identity: subject=%q, userinfo=%v", identity.Subject, identity.UserInfo != nil)
 		}
-		log.Printf("[idp] DEBUG after restore: session.JWTClaims.Subject=%q, Extra=%v",
-			session.JWTClaims.Subject, session.JWTClaims.Extra)
 	}
 
 	response, err := a.provider.NewAccessResponse(ctx, accessRequest)
@@ -454,6 +448,13 @@ func (a *IDPRouter) handleJWKS(c *gin.Context) {
 
 	ks := jwks{Keys: []jwk{k}}
 	c.JSON(200, ks)
+}
+
+// UserIdentity stores the authenticated user's identity separately from
+// fosite's session, which loses custom JWT claims during serialization.
+type UserIdentity struct {
+	Subject  string         `json:"subject"`
+	UserInfo map[string]any `json:"userinfo,omitempty"`
 }
 
 func NewJWTSessionWithKey(iss string, subject string, privateKey *rsa.PrivateKey, userInfo map[string]any) (*Session, error) {

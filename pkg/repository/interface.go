@@ -15,7 +15,13 @@ type Repository interface {
 	pkce.PKCERequestStorage
 	DynamicClientStorage
 	AuthorizeRequestStorage
+	IdentityStorage
 	Close() error
+}
+
+type IdentityStorage interface {
+	StoreIdentity(ctx context.Context, requestID string, identityJSON string) error
+	GetIdentity(ctx context.Context, requestID string) (string, error)
 }
 
 type DynamicClientStorage interface {

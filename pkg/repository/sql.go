@@ -96,6 +96,7 @@ func NewSQLRepository(driver string, dsn string) (Repository, error) {
 		&clientRecord{},
 		&pkceRequestSession{},
 		&authorizeRequestRecord{},
+		&identityRecord{},
 	); err != nil {
 		return nil, fmt.Errorf("failed to migrate schema: %w", err)
 	}
@@ -332,6 +333,25 @@ func (r *sqlRepository) GetAuthorizeRequest(ctx context.Context, requestID strin
 
 func (r *sqlRepository) DeleteAuthorizeRequest(ctx context.Context, requestID string) error {
 	return r.db.WithContext(ctx).Delete(&authorizeRequestRecord{}, "request_id = ?", requestID).Error
+}
+
+type identityRecord struct {
+	RequestID    string `gorm:"primaryKey;size:512"`
+	IdentityJSON string `gorm:"not null"`
+	CreatedAt    time.Time
+}
+
+func (r *sqlRepository) StoreIdentity(ctx context.Context, requestID string, identityJSON string) error {
+	record := identityRecord{RequestID: requestID, IdentityJSON: identityJSON}
+	return r.db.WithContext(ctx).Clauses(clause.OnConflict{UpdateAll: true}).Create(&record).Error
+}
+
+func (r *sqlRepository) GetIdentity(ctx context.Context, requestID string) (string, error) {
+	var record identityRecord
+	if err := r.db.WithContext(ctx).First(&record, "request_id = ?", requestID).Error; err != nil {
+		return "", err
+	}
+	return record.IdentityJSON, nil
 }
 
 func (r *sqlRepository) Close() error {
