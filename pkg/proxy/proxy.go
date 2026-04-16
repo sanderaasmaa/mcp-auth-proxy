@@ -3,6 +3,7 @@ package proxy
 import (
 	"crypto/rsa"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -93,6 +94,13 @@ func (p *ProxyRouter) handleProxy(c *gin.Context) {
 
 	if len(p.headerMapping) > 0 {
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
+			// DEBUG: log JWT claim keys and sub value
+			claimKeys := make([]string, 0, len(claims))
+			for k := range claims {
+				claimKeys = append(claimKeys, k)
+			}
+			log.Printf("[proxy] DEBUG JWT claim keys: %v, sub=%v, userinfo exists=%v", claimKeys, claims["sub"], claims["userinfo"] != nil)
+
 			// Try userinfo claim first, fall back to top-level claims
 			var source any = claims
 			if userinfo, exists := claims["userinfo"]; exists {
@@ -100,6 +108,7 @@ func (p *ProxyRouter) handleProxy(c *gin.Context) {
 			}
 			for pointer, headerName := range p.headerMapping {
 				val, err := jsonpointer.Get(source, pointer)
+				log.Printf("[proxy] DEBUG mapping %s -> %s: val=%v, err=%v", pointer, headerName, val, err)
 				if err != nil {
 					continue
 				}
