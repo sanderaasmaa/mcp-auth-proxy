@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"math/big"
 	"net/url"
 	"strings"
@@ -206,23 +207,36 @@ func (a *IDPRouter) handleToken(c *gin.Context) {
 		return
 	}
 
+	// Debug: inspect what fosite restored into the session
+	restoredSession := accessRequest.GetSession()
+	log.Printf("[idp] DEBUG session type: %T", restoredSession)
+	if stored, ok := restoredSession.(*Session); ok {
+		log.Printf("[idp] DEBUG stored Session: subject=%q, username=%q, jwtClaims.Subject=%q, jwtClaims.Extra=%v",
+			stored.DefaultSession.Subject, stored.DefaultSession.Username,
+			stored.JWTClaims.Subject, stored.JWTClaims.Extra)
+	} else if ds, ok := restoredSession.(*fosite.DefaultSession); ok {
+		log.Printf("[idp] DEBUG DefaultSession only: subject=%q, username=%q", ds.Subject, ds.Username)
+	} else {
+		log.Printf("[idp] DEBUG unknown session type, value: %+v", restoredSession)
+	}
+
 	// Restore subject and userinfo from the stored authorization session.
-	// Fosite restores DefaultSession but not JWTClaims.Subject/Extra,
-	// so the access token JWT would be anonymous without this.
-	if stored, ok := accessRequest.GetSession().(*Session); ok {
+	if stored, ok := restoredSession.(*Session); ok {
 		if stored.DefaultSession != nil && stored.DefaultSession.Subject != "" {
 			session.JWTClaims.Subject = stored.DefaultSession.Subject
 			session.DefaultSession.Subject = stored.DefaultSession.Subject
 			session.DefaultSession.Username = stored.DefaultSession.Username
 		}
 		if stored.JWTClaims != nil {
-			if session.JWTClaims.Extra == nil && stored.JWTClaims.Extra != nil {
+			if stored.JWTClaims.Extra != nil {
 				session.JWTClaims.Extra = stored.JWTClaims.Extra
 			}
-			if session.JWTClaims.Subject == "" && stored.JWTClaims.Subject != "" {
+			if stored.JWTClaims.Subject != "" {
 				session.JWTClaims.Subject = stored.JWTClaims.Subject
 			}
 		}
+		log.Printf("[idp] DEBUG after restore: session.JWTClaims.Subject=%q, Extra=%v",
+			session.JWTClaims.Subject, session.JWTClaims.Extra)
 	}
 
 	response, err := a.provider.NewAccessResponse(ctx, accessRequest)
