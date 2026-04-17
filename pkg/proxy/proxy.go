@@ -93,6 +93,10 @@ func (p *ProxyRouter) handleProxy(c *gin.Context) {
 	}
 
 	if len(p.headerMapping) > 0 {
+		// Strip any client-supplied mapped headers to prevent forgery
+		for _, headerName := range p.headerMapping {
+			c.Request.Header.Del(headerName)
+		}
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
 			// DEBUG: log JWT claim keys and sub value
 			claimKeys := make([]string, 0, len(claims))
