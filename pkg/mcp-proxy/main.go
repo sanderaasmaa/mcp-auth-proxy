@@ -297,7 +297,16 @@ func Run(
 	if err != nil {
 		return fmt.Errorf("failed to create IDP router: %w", err)
 	}
-	proxyRouter, err := newProxyRouter(externalURL, beHandler, &privKey.PublicKey, proxyHeadersMap, httpStreamingOnly, headerMapping)
+	var publicPaths []string
+	if pp := os.Getenv("PUBLIC_PATHS"); pp != "" {
+		for _, p := range strings.Split(pp, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				publicPaths = append(publicPaths, p)
+			}
+		}
+	}
+
+	proxyRouter, err := newProxyRouter(externalURL, beHandler, &privKey.PublicKey, proxyHeadersMap, httpStreamingOnly, headerMapping, publicPaths)
 	if err != nil {
 		return fmt.Errorf("failed to create proxy router: %w", err)
 	}
