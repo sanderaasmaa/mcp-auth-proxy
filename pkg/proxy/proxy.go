@@ -20,6 +20,7 @@ type ProxyRouter struct {
 	forwardAuthorizationHeader bool
 	headerMapping              map[string]string
 	headerMappingBase          string
+	publicPaths                []string
 }
 
 func NewProxyRouter(
@@ -31,6 +32,7 @@ func NewProxyRouter(
 	forwardAuthorizationHeader bool,
 	headerMapping map[string]string,
 	headerMappingBase string,
+	publicPaths []string,
 ) (*ProxyRouter, error) {
 	return &ProxyRouter{
 		externalURL:                externalURL,
@@ -41,6 +43,7 @@ func NewProxyRouter(
 		forwardAuthorizationHeader: forwardAuthorizationHeader,
 		headerMapping:              headerMapping,
 		headerMappingBase:          headerMappingBase,
+		publicPaths:                publicPaths,
 	}, nil
 }
 
@@ -66,6 +69,15 @@ func (p *ProxyRouter) handleProtectedResource(c *gin.Context) {
 }
 
 func (p *ProxyRouter) handleProxy(c *gin.Context) {
+	// Allow configured public paths through without JWT authentication.
+	for _, pp := range p.publicPaths {
+		if strings.HasPrefix(c.Request.URL.Path, pp) {
+			p.proxy.ServeHTTP(c.Writer, c.Request)
+			c.Abort()
+			return
+		}
+	}
+
 	authHeader := c.Request.Header.Get("Authorization")
 	if !strings.HasPrefix(authHeader, "Bearer ") {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})

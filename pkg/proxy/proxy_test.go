@@ -70,7 +70,7 @@ func TestProxyRouter_HandleProxy_ValidToken(t *testing.T) {
 	proxyHeaders := make(http.Header)
 	proxyHeaders.Set("X-Forwarded-By", "mcp-auth-proxy")
 
-	proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, proxyHeaders, false, false, nil, "/userinfo")
+	proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, proxyHeaders, false, false, nil, "/userinfo", nil)
 	require.NoError(t, err)
 
 	gin.SetMode(gin.TestMode)
@@ -163,7 +163,7 @@ func TestProxyRouter_HeaderMapping(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, false, tt.headerMapping, "/userinfo")
+			proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, false, tt.headerMapping, "/userinfo", nil)
 			require.NoError(t, err)
 
 			gin.SetMode(gin.TestMode)
@@ -293,7 +293,7 @@ func TestProxyRouter_HeaderMappingBase(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, false, tt.headerMapping, tt.headerMappingBase)
+			proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, false, tt.headerMapping, tt.headerMappingBase, nil)
 			require.NoError(t, err)
 
 			gin.SetMode(gin.TestMode)
@@ -332,7 +332,7 @@ func TestProxyRouter_AuthorizationHeaderDefaultBehavior(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, false, nil, "/userinfo")
+		proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, false, nil, "/userinfo", nil)
 		require.NoError(t, err)
 
 		gin.SetMode(gin.TestMode)
@@ -364,7 +364,7 @@ func TestProxyRouter_AuthorizationHeaderDefaultBehavior(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, true, nil, "/userinfo")
+		proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, true, nil, "/userinfo", nil)
 		require.NoError(t, err)
 
 		gin.SetMode(gin.TestMode)
@@ -474,7 +474,7 @@ func TestProxyRouter_HeaderMappingStripsClientHeaders(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, false, tt.headerMapping, tt.headerMappingBase)
+			proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, false, false, tt.headerMapping, tt.headerMappingBase, nil)
 			require.NoError(t, err)
 
 			gin.SetMode(gin.TestMode)
@@ -509,7 +509,7 @@ func TestProxyRouter_ProtectedResourceTrailingSlash(t *testing.T) {
 	_, publicKey, err := generateRSAKeyPair()
 	require.NoError(t, err)
 
-	proxyRouter, err := NewProxyRouter("https://example.com/", http.NotFoundHandler(), publicKey, http.Header{}, false, false, nil, "/userinfo")
+	proxyRouter, err := NewProxyRouter("https://example.com/", http.NotFoundHandler(), publicKey, http.Header{}, false, false, nil, "/userinfo", nil)
 	require.NoError(t, err)
 
 	gin.SetMode(gin.TestMode)
@@ -613,7 +613,7 @@ func TestProxyRouter_HTTPStreamingOnlyRejectsSSE(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			})
 
-			proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, tt.streamingOnly, false, nil, "/userinfo")
+			proxyRouter, err := NewProxyRouter("https://example.com", proxyHandler, publicKey, http.Header{}, tt.streamingOnly, false, nil, "/userinfo", nil)
 			require.NoError(t, err)
 
 			gin.SetMode(gin.TestMode)

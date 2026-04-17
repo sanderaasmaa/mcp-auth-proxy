@@ -34,7 +34,7 @@ func TestRun_NormalizesExternalURLTrailingSlash(t *testing.T) {
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			var receivedURL string
-			newProxyRouter = func(externalURL string, proxyHandler http.Handler, publicKey *rsa.PublicKey, proxyHeaders http.Header, httpStreamingOnly bool, forwardAuthorizationHeader bool, headerMapping map[string]string, headerMappingBase string) (*proxy.ProxyRouter, error) {
+			newProxyRouter = func(externalURL string, proxyHandler http.Handler, publicKey *rsa.PublicKey, proxyHeaders http.Header, httpStreamingOnly bool, forwardAuthorizationHeader bool, headerMapping map[string]string, headerMappingBase string, publicPaths []string) (*proxy.ProxyRouter, error) {
 				receivedURL = externalURL
 				return nil, errors.New("stop early")
 			}
@@ -70,7 +70,7 @@ func TestRun_PassesHTTPStreamingOnlyToProxyRouter(t *testing.T) {
 	})
 
 	var streamingOnlyReceived bool
-	newProxyRouter = func(externalURL string, proxyHandler http.Handler, publicKey *rsa.PublicKey, proxyHeaders http.Header, httpStreamingOnly bool, forwardAuthorizationHeader bool, headerMapping map[string]string, headerMappingBase string) (*proxy.ProxyRouter, error) {
+	newProxyRouter = func(externalURL string, proxyHandler http.Handler, publicKey *rsa.PublicKey, proxyHeaders http.Header, httpStreamingOnly bool, forwardAuthorizationHeader bool, headerMapping map[string]string, headerMappingBase string, publicPaths []string) (*proxy.ProxyRouter, error) {
 		streamingOnlyReceived = httpStreamingOnly
 		return nil, errors.New("proxy router init failed")
 	}
