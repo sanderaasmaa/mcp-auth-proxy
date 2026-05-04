@@ -70,6 +70,13 @@ func (p *ProxyRouter) handleProtectedResource(c *gin.Context) {
 
 func (p *ProxyRouter) handleProxy(c *gin.Context) {
 	// Allow configured public paths through without JWT authentication.
+	//
+	// SECURITY: this bypass also skips the upstream PR #148 header strip below.
+	// Backend handlers serving public paths MUST NOT trust any header that
+	// appears in HEADER_MAPPING (e.g. X-User-Email) — a client can send that
+	// header themselves on a public path and the gateway will not strip it.
+	// Authenticate public-path requests by some other means (e.g. an OAuth
+	// state parameter validated server-side) before keying any per-user data.
 	for _, pp := range p.publicPaths {
 		if strings.HasPrefix(c.Request.URL.Path, pp) {
 			p.proxy.ServeHTTP(c.Writer, c.Request)
